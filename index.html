@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ArchDoc - Minimalist Document Generator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&family=Sarabun:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        :root {
+            --black: #111;
+            --white: #fff;
+            --gray-light: #f5f5f5;
+            --gray-border: #e0e0e0;
+            --gray-text: #666;
+            --font-head: 'Prompt', sans-serif;
+            --font-body: 'Sarabun', sans-serif;
+            --bg-preview: #525659;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font-body); color: var(--black); background: var(--gray-light); display: flex; height: 100vh; overflow: hidden; }
+        
+        h1, h2, h3, h4, .brand-font { font-family: var(--font-head); font-weight: 500; }
+
+        /* Sidebar Control Panel */
+        .sidebar { width: 420px; background: var(--white); border-right: 1px solid var(--gray-border); display: flex; flex-direction: column; height: 100%; z-index: 10; flex-shrink: 0; }
+        .header { padding: 20px; border-bottom: 1px solid var(--gray-border); background: var(--black); color: var(--white); }
+        .header h1 { font-size: 18px; letter-spacing: 1px; }
+        
+        .tabs { display: flex; border-bottom: 1px solid var(--gray-border); background: #fafafa; }
+        .tab-btn { flex: 1; padding: 12px; border: none; background: none; font-family: var(--font-head); font-size: 13px; cursor: pointer; color: var(--gray-text); border-bottom: 2px solid transparent; }
+        .tab-btn.active { color: var(--black); font-weight: 600; border-bottom: 2px solid var(--black); background: var(--white); }
+
+        .form-area { flex: 1; overflow-y: auto; padding: 20px; }
+        .form-section { display: none; }
+        .form-section.active { display: block; }
+
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; font-family: var(--font-head); }
+        input[type="text"], input[type="number"], input[type="file"], input[type="date"], textarea, select { width: 100%; padding: 10px; border: 1px solid var(--gray-border); border-radius: 2px; font-family: var(--font-body); font-size: 14px; outline: none; background: var(--white); }
+        input:focus, textarea:focus, select:focus { border-color: var(--black); }
+        
+        .checkbox-group { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+        .checkbox-group input { width: 16px; height: 16px; accent-color: var(--black); margin-top: 2px; flex-shrink: 0; }
+        .checkbox-group label { margin-bottom: 0; font-weight: 400; font-family: var(--font-body); line-height: 1.4; }
+
+        .btn { width: 100%; padding: 12px; background: var(--black); color: var(--white); border: none; font-family: var(--font-head); font-size: 14px; cursor: pointer; margin-top: 10px; transition: 0.2s; text-align: center; }
+        .btn:hover { background: #333; }
+        .btn-outline { background: var(--white); color: var(--black); border: 1px solid var(--black); }
+        .btn-outline:hover { background: var(--gray-light); }
+        .btn-small { padding: 5px 10px; font-size: 12px; width: auto; margin-top: 0; }
+        .btn-danger { background: #dc3545; color: white; border: none; padding: 5px 10px; cursor: pointer; font-family: var(--font-head); }
+
+        /* Preview Area */
+        .preview-area { flex: 1; overflow-y: auto; padding: 40px 20px; display: flex; flex-direction: column; align-items: center; background: var(--bg-preview); }
+        
+        .document-page { display: none; width: 100%; flex-direction: column; align-items: center; gap: 30px; }
+        .document-page.active { display: flex; }
+
+        .pdf-sheet {
+            background: var(--white); 
+            width: 210mm; 
+            min-height: 297mm; 
+            padding: 20mm; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5); 
+            position: relative; 
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .exporting { gap: 0 !important; }
+        .exporting .pdf-sheet { box-shadow: none !important; margin-bottom: 0 !important; }
+
+        .q-section, .items-table tr, .signatures { page-break-inside: avoid; }
+        
+        /* สไตล์หน้าปก */
+        .cover-page { justify-content: flex-start; align-items: center; text-align: center; padding-top: 40mm; }
+        .cover-title { font-size: 36px; font-weight: 600; font-family: var(--font-head); margin-bottom: 5px; }
+        .cover-subtitle { font-size: 24px; color: var(--black); margin-bottom: 5px; font-family: var(--font-head); }
+        .cover-date { font-size: 16px; color: var(--gray-text); margin-bottom: 40px; }
+        .cover-details { width: 85%; border-top: 2px solid var(--black); border-bottom: 2px solid var(--black); padding: 25px 0; text-align: left; font-size: 16px; line-height: 2; margin-bottom: 20px; }
+        .cover-footer { width: 100%; text-align: left; font-size: 14px; line-height: 1.6; margin-top: auto; padding-top: 20px;}
+        
+        /* สไตล์หน้าลายเซ็น (ปรับให้ดันข้อความขึ้นบน) */
+        .signature-page { padding-top: 30mm; justify-content: flex-start; }
+
+        .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 400px; opacity: 0.15; z-index: 0; pointer-events: none; }
+        .content-wrap { position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column; }
+
+        /* Document Styling */
+        .doc-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid var(--black); padding-bottom: 15px; margin-bottom: 20px; flex-shrink: 0; }
+        .doc-title { font-family: var(--font-head); font-size: 24px; font-weight: 600; line-height: 1.2; }
+        .meta-table { border-collapse: collapse; }
+        .meta-table td { padding: 2px 10px; font-size: 12px; font-family: var(--font-body); }
+        .meta-table td:first-child { font-weight: 600; text-align: right; font-family: var(--font-head); white-space: nowrap; }
+        
+        .address-box { font-size: 12px; line-height: 1.6; margin-bottom: 20px; display: flex; justify-content: space-between; flex-shrink: 0; }
+        .address-col { width: 48%; }
+        .address-title { font-family: var(--font-head); font-weight: 600; border-bottom: 1px solid var(--gray-border); margin-bottom: 5px; padding-bottom: 3px; }
+
+        .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
+        .items-table th { background: var(--black); color: var(--white); padding: 8px; font-family: var(--font-head); font-weight: 400; text-align: left; }
+        .items-table td { padding: 10px 8px; border-bottom: 1px solid var(--gray-border); vertical-align: top; }
+        .text-right { text-align: right !important; }
+        .text-center { text-align: center !important; }
+
+        .summary-box { display: flex; justify-content: flex-end; margin-bottom: 10px; flex-shrink: 0; }
+        .totals-table { width: 45%; border-collapse: collapse; font-size: 12px; }
+        .totals-table td { padding: 6px; border-bottom: 1px solid var(--gray-border); }
+        .totals-table .grand-total { font-weight: 600; font-size: 14px; border-bottom: 2px solid var(--black); border-top: 1px solid var(--black); }
+        
+        .thai-baht-text { font-size: 12px; font-weight: 600; margin-top: 10px; text-align: right; flex-shrink: 0; }
+
+        .payment-info { width: 100%; font-size: 12px; padding: 15px; background: var(--gray-light); border: 1px solid var(--gray-border); border-radius: 2px; line-height: 1.5; margin-top: 30px; margin-bottom: 40px; display: flex; align-items: center; gap: 15px; flex-shrink: 0; }
+        .bank-logo { width: 50px; height: 50px; object-fit: contain; border-radius: 4px; }
+
+        .signatures { display: flex; justify-content: space-between; margin-top: auto; font-size: 12px; text-align: center; padding-top: 20px; }
+        .sig-box { width: 40%; }
+        .sig-line { border-bottom: 1px solid var(--black); height: 50px; margin-bottom: 5px; position: relative; }
+        .sig-img { max-height: 60px; position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); }
+
+        /* Quotation Specific */
+        .q-section { margin-bottom: 15px; font-size: 12px; flex-shrink: 0; }
+        .q-head { font-family: var(--font-head); font-weight: 600; background: var(--gray-light); padding: 5px 10px; border-left: 3px solid var(--black); margin-bottom: 10px; }
+        .q-list { list-style: none; margin-left: 10px; }
+        .q-list li::before { content: "- "; }
+        .q-img-preview { max-width: 100%; max-height: 200px; margin: 10px 0; border: 1px solid var(--gray-border); display: none; }
+        .terms-text { font-size: 11px; line-height: 1.5; color: #333; margin-top: 10px; flex-shrink: 0; }
+
+        .dynamic-row { display: flex; gap: 5px; margin-bottom: 5px; align-items: center; }
+        .dynamic-row input { padding: 5px; font-size: 13px; }
+
+        .setting-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 12px; }
+        .setting-table th, .setting-table td { border: 1px solid var(--gray-border); padding: 5px; text-align: center; }
+        .setting-table th { background: #eee; }
+
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <div class="header">
+        <h1>MINIMAL ARCH. DOCS</h1>
+    </div>
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('billing')">ใบวางบิล</button>
+        <button class="tab-btn" onclick="switchTab('receipt')">ใบเสร็จ</button>
+        <button class="tab-btn" onclick="switchTab('quotation')">ใบเสนอราคา</button>
+        <button class="tab-btn" onclick="switchTab('history')">ประวัติ</button>
+    </div>
+
+    <div class="form-area">
+        <!-- ใบวางบิล ฟอร์ม -->
+        <div id="form-billing" class="form-section active">
+            <h3 style="font-size:14px; margin-bottom:10px; color:var(--black); border-bottom:1px solid #111; padding-bottom:5px;">ข้อมูลลูกค้า</h3>
+            <div class="form-group">
+                <label>เลือกรหัสลูกค้า</label>
+                <div style="display:flex; gap:5px;">
+                    <select id="b-cust-code" onchange="selectCustomer()"><option value="">-- เลือกรหัสลูกค้า --</option></select>
+                    <button type="button" class="btn btn-small" onclick="saveCurrentCustomer()">บันทึกรหัส</button>
+                </div>
+            </div>
+            <div class="form-group"><label>ชื่อลูกค้า / บริษัท</label><input type="text" id="b-cust-name" oninput="updatePreview()"></div>
+            <div class="form-group"><label>ที่อยู่ลูกค้า</label><textarea id="b-cust-addr" rows="2" oninput="updatePreview()"></textarea></div>
+            <div class="form-group"><label>เลขประจำตัวผู้เสียภาษีลูกค้า</label><input type="text" id="b-cust-tax" oninput="updatePreview()"></div>
+            
+            <h3 style="font-size:14px; margin:20px 0 10px 0; color:var(--black); border-bottom:1px solid #111; padding-bottom:5px;">รายละเอียดงาน</h3>
+            <div class="form-group"><label>ชื่อโครงการ</label><input type="text" id="b-proj-name" oninput="updatePreview()"></div>
+            <div class="form-group"><label>รายละเอียดงาน (พิมพ์ยาวๆ ขึ้นบรรทัดใหม่ได้)</label><textarea id="b-proj-detail" rows="4" oninput="updatePreview()"></textarea></div>
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;"><label>จำนวน</label><input type="number" id="b-qty" value="1" oninput="updatePreview()"></div>
+                <div class="form-group" style="flex:2;"><label>ราคา (บาท)</label><input type="number" id="b-price" value="0" oninput="updatePreview()"></div>
+            </div>
+            <div class="checkbox-group"><input type="checkbox" id="b-wht" checked onchange="updatePreview()"><label for="b-wht">หักภาษี ณ ที่จ่าย 3%</label></div>
+            <div class="form-group" style="margin-top:15px;"><label>อัปโหลดลายเซ็นผู้วางบิล</label><input type="file" id="b-sig-upload" accept="image/*" onchange="uploadSignature(this, 'b-sig')"></div>
+            
+            <button class="btn" onclick="exportPDF('billing')">ดาวน์โหลด PDF (ใบวางบิล)</button>
+            <hr style="margin:20px 0; border:0; border-top:1px dashed var(--gray-border);">
+            <div class="form-group"><label>หลักฐานการโอนเงิน (เพื่อออกใบเสร็จ)</label><input type="file" id="slip-upload" accept="image/*"></div>
+            <button class="btn btn-outline" onclick="confirmPayment()">ยืนยันการชำระเงิน -> ออกใบเสร็จ</button>
+
+            <h3 style="font-size:14px; margin:30px 0 10px 0; color:var(--black); border-bottom:1px solid #111; padding-bottom:5px;">ข้อมูลผู้ให้บริการ (ตั้งค่า)</h3>
+            <div class="form-group"><label>ชื่อผู้ให้บริการ</label><input type="text" id="p-name" value="นายอชิร ก่อแก้ว" oninput="updatePreview()"></div>
+            <div class="form-group"><label>ที่อยู่ผู้ให้บริการ</label><textarea id="p-addr" rows="3" oninput="updatePreview()">11 ซอยรามคำแหง 4 แขวงสวนหลวง เขตสวนหลวง จังหวัดกรุงเทพฯ 10250</textarea></div>
+            <div class="form-group"><label>ข้อมูลติดต่อ (โทร / Email)</label><textarea id="p-contact" rows="2" oninput="updatePreview()">โทร: 097-156-7724&#10;Email: Achiraxkorkaew@gmail.com</textarea></div>
+            <div class="form-group"><label>ธนาคารที่รับเงิน</label><input type="text" id="p-bank" value="ธนาคารกรุงเทพ" oninput="updatePreview()"></div>
+            <div class="form-group"><label>ชื่อบัญชี</label><input type="text" id="p-bank-acc" value="นายอชิร ก่อแก้ว" oninput="updatePreview()"></div>
+            <div class="form-group"><label>เลขที่บัญชี</label><input type="text" id="p-bank-no" value="010-0-47-562-3" oninput="updatePreview()"></div>
+        </div>
+
+        <!-- ใบเสร็จ ฟอร์ม -->
+        <div id="form-receipt" class="form-section">
+            <p style="font-size: 12px; color: var(--gray-text); margin-bottom: 15px;">*ข้อมูลดึงมาจากหน้าใบวางบิล</p>
+            <div class="form-group"><label>วันที่รับเงิน</label><input type="date" id="r-date" oninput="updatePreview()"></div>
+            <div class="form-group"><label>อัปโหลดลายเซ็นผู้รับเงิน</label><input type="file" id="r-sig-upload" accept="image/*" onchange="uploadSignature(this, 'r-sig')"></div>
+            <button class="btn" onclick="exportPDF('receipt')">ดาวน์โหลด PDF (ใบเสร็จรับเงิน)</button>
+        </div>
+
+        <!-- ใบเสนอราคา ฟอร์ม -->
+        <div id="form-quotation" class="form-section">
+            <div class="form-group"><label>ชื่อลูกค้า</label><input type="text" id="q-cust-name" oninput="updatePreview()"></div>
+            
+            <div class="form-group">
+                <label>ประเภทอาคาร</label>
+                <select id="q-btype" onchange="calcGuideFee()">
+                    <option value="">-- เลือกประเภทอาคาร --</option>
+                </select>
+            </div>
+            
+            <div class="form-group"><label>ชื่อโครงการ</label><input type="text" id="q-proj-name" oninput="updatePreview()"></div>
+            <div class="form-group"><label>ที่ตั้งโครงการ</label><input type="text" id="q-proj-loc" oninput="updatePreview()"></div>
+            
+            <div style="display:flex; gap:10px;">
+                <div class="form-group" style="flex:1;"><label>ขนาดพื้นที่ (ตร.ม.)</label><input type="number" id="q-proj-size" value="0" oninput="calcGuideFee()"></div>
+                <div class="form-group" style="flex:1;"><label>จำนวนชั้น</label><input type="number" id="q-proj-floors" value="1" oninput="updatePreview()"></div>
+            </div>
+            
+            <div class="form-group">
+                <label>ค่าบริการวิชาชีพ (บาท) <span id="guide-fee-text" style="color:#d9534f; font-weight:normal; font-size:11px;"></span></label>
+                <input type="number" id="q-price" value="0" oninput="updatePreview()">
+            </div>
+            
+            <div class="form-group"><label>รูปประกอบโครงการ</label><input type="file" accept="image/*" onchange="uploadImage(this, 'q-img')"></div>
+            
+            <label>ขอบเขตงานออกแบบ</label>
+            <div style="background:#fafafa; border:1px solid #ddd; padding:10px; margin-bottom:15px;">
+                <div class="checkbox-group"><input type="checkbox" id="q-s1" checked onchange="updatePreview()"><label>งานออกแบบสถาปัตยกรรม</label></div>
+                <div class="checkbox-group"><input type="checkbox" id="q-s2" checked onchange="updatePreview()"><label>งานออกแบบโครงสร้างวิศวกรรม</label></div>
+                <div class="checkbox-group"><input type="checkbox" id="q-s3" checked onchange="updatePreview()"><label>งานออกแบบงานระบบไฟฟ้าและสุขาภิบาล</label></div>
+                <div class="checkbox-group"><input type="checkbox" id="q-s4" onchange="updatePreview()"><label>งานออกแบบตกแต่งภายใน (Interior Design)</label></div>
+                <div class="checkbox-group"><input type="checkbox" id="q-s5" onchange="updatePreview()"><label>งานออกแบบภูมิสถาปัตยกรรม (Landscape)</label></div>
+                <div class="checkbox-group"><input type="checkbox" id="q-s6" onchange="updatePreview()"><label>งานออกแบบวางผังเชิงแนวคิดโคกหนองนา</label></div>
+            </div>
+
+            <label>ขั้นตอนการดำเนินงาน (เพิ่ม/ลด ได้)</label>
+            <div style="background:#fafafa; border:1px solid #ddd; padding:10px; margin-bottom:15px;" id="q-timeline-container">
+            </div>
+            <button class="btn btn-outline btn-small" style="margin-bottom:15px;" onclick="addTimelineRow()">+ เพิ่มขั้นตอน</button>
+
+            <label>งวดการชำระเงิน (% ของค่าวิชาชีพ)</label>
+            <div style="background:#fafafa; border:1px solid #ddd; padding:10px; margin-bottom:15px;" id="q-install-container">
+            </div>
+            <button class="btn btn-outline btn-small" style="margin-bottom:15px;" onclick="addInstallmentRow()">+ เพิ่มงวดงาน</button>
+
+            <label>เงื่อนไขมาตรฐาน (เพิ่ม/ลด/แก้ไข ได้)</label>
+            <div style="background:#fafafa; border:1px solid #ddd; padding:10px; margin-bottom:15px;" id="q-terms-container">
+            </div>
+            <button class="btn btn-outline btn-small" style="margin-bottom:15px;" onclick="addTermRow()">+ เพิ่มเงื่อนไข</button>
+
+            <div class="form-group"><label>อัปโหลดลายเซ็นผู้เสนอราคา</label><input type="file" id="q-sig-upload" accept="image/*" onchange="uploadSignature(this, 'q-sig')"></div>
+            
+            <button class="btn" onclick="exportPDF('quotation')">ดาวน์โหลด PDF (ใบเสนอราคา)</button>
+
+            <hr style="margin:30px 0; border:0; border-top:2px solid var(--black);">
+            
+            <h3 style="font-size:14px; margin-bottom:10px; color:var(--black);">ตั้งค่าประเภทอาคาร (สำหรับคำนวณ)</h3>
+            <table class="setting-table" id="btype-table">
+                <thead><tr><th>ชื่ออาคาร</th><th>ราคา/ตร.ม.</th><th>% วิชาชีพ</th><th>ลบ</th></tr></thead>
+                <tbody></tbody>
+            </table>
+            <div style="display:flex; gap:5px; margin-bottom:10px;">
+                <input type="text" id="new-bt-name" placeholder="ชื่อประเภท">
+                <input type="number" id="new-bt-price" placeholder="ราคา/ตร.ม." style="width:100px;">
+                <input type="number" id="new-bt-percent" placeholder="%" style="width:60px;">
+                <button class="btn btn-outline btn-small" onclick="addBType()">เพิ่ม</button>
+            </div>
+        </div>
+
+        <div id="form-history" class="form-section">
+            <p style="font-size: 12px; color: var(--gray-text); margin-bottom: 15px;">คลิกที่ประวัติเพื่อดึงข้อมูลกลับมาแก้ไขได้เลยมึง!</p>
+            <div id="history-container"></div>
+            <button class="btn btn-outline" onclick="clearHistory()" style="margin-top:20px;">ล้างประวัติทั้งหมด</button>
+        </div>
+    </div>
+</div>
+
+<div class="preview-area">
+    <!-- ================== ใบวางบิล ================== -->
+    <div id="page-billing" class="document-page active">
+        <div class="pdf-sheet">
+            <img src="watermark.png" class="watermark" onerror="this.style.display='none'">
+            <div class="content-wrap">
+                <div class="doc-header">
+                    <div class="doc-title">ใบวางบิล<br><span style="font-size:14px; color:var(--gray-text); font-family:var(--font-body); font-weight:400;">INVOICE / BILLING</span></div>
+                    <table class="meta-table">
+                        <tr><td>เลขที่เอกสาร:</td><td id="pv-b-no">INV-20240101-01</td></tr>
+                        <tr><td>วันที่:</td><td id="pv-b-date">-</td></tr>
+                        <tr><td>รหัสลูกค้า:</td><td id="pv-b-cid">-</td></tr>
+                    </table>
+                </div>
+                <div class="address-box">
+                    <div class="address-col"><div class="address-title">ลูกค้า (Bill To)</div><strong id="pv-b-cname">ชื่อลูกค้า</strong><br><span id="pv-b-caddr" style="white-space: pre-line;">ที่อยู่ลูกค้า...</span><br>เลขประจำตัวผู้เสียภาษี: <span id="pv-b-ctax">-</span></div>
+                    <div class="address-col"><div class="address-title">ผู้ให้บริการ (Provider)</div><strong id="pv-b-pvd-name">-</strong><br><span id="pv-b-pvd-addr" style="white-space: pre-line;">-</span><br><span id="pv-b-pvd-contact" style="white-space: pre-line;">-</span></div>
+                </div>
+                <table class="items-table">
+                    <thead><tr><th style="width:5%; text-align:center;">ลำดับ</th><th>โครงการ / รายละเอียดงาน</th><th class="text-center" style="width:6%;">จำนวน</th><th class="text-right" style="width:16%;">ราคา/หน่วย</th><th class="text-right" style="width:20%;">จำนวนเงิน (บาท)</th></tr></thead>
+                    <tbody><tr><td class="text-center">1</td><td><strong id="pv-b-pname">ชื่อโครงการ</strong><br><span id="pv-b-pdetail" style="color:#555; white-space: pre-line;">รายละเอียด...</span></td><td class="text-center" id="pv-b-pqty">1</td><td class="text-right" id="pv-b-pprice">0.00</td><td class="text-right" id="pv-b-ptotal">0.00</td></tr></tbody>
+                </table>
+                <div class="summary-box">
+                    <table class="totals-table">
+                        <tr><td class="text-right">รวมเป็นเงิน (Subtotal)</td><td class="text-right" id="pv-b-sub">0.00</td></tr>
+                        <tr id="row-b-wht"><td class="text-right">หักภาษี ณ ที่จ่าย 3%</td><td class="text-right" id="pv-b-whtval">-0.00</td></tr>
+                        <tr><td class="text-right grand-total">จำนวนเงินทั้งสิ้น (Grand Total)</td><td class="text-right grand-total" id="pv-b-grand">0.00</td></tr>
+                    </table>
+                </div>
+                <div class="thai-baht-text" id="pv-b-text">(ศูนย์บาทถ้วน)</div>
+                <div class="payment-info">
+                    <img src="bank.png" class="bank-logo" alt="Bangkok Bank" onerror="this.style.display='none'">
+                    <div><strong style="font-family:var(--font-head); font-size:14px;">ข้อมูลการชำระเงิน (Bank Transfer)</strong><br>ธนาคาร: <strong id="pv-b-pvd-bank">-</strong> &nbsp;|&nbsp; ชื่อบัญชี: <strong id="pv-b-pvd-bankacc">-</strong> &nbsp;|&nbsp; เลขบัญชี: <strong id="pv-b-pvd-bankno">-</strong><br><span style="color:#888; font-size:11px;">*กรุณาแนบหลักฐานการโอนเงินเมื่อทำการชำระเรียบร้อยแล้ว</span></div>
+                </div>
+                <div class="signatures">
+                    <div class="sig-box"><div class="sig-line"></div>ผู้รับวางบิล / ลูกค้า<br>วันที่ _______/_______/_______</div>
+                    <div class="sig-box"><div class="sig-line"><img id="b-sig-img" src="sig.png" class="sig-img" style="display:block;" onerror="this.style.display='none'"></div><span id="pv-b-sig-name">-</span><br>ผู้วางบิล</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================== ใบเสร็จรับเงิน ================== -->
+    <div id="page-receipt" class="document-page">
+        <div class="pdf-sheet">
+            <img src="watermark.png" class="watermark" onerror="this.style.display='none'">
+            <div class="content-wrap">
+                <div class="doc-header">
+                    <div class="doc-title">ใบเสร็จรับเงิน<br><span style="font-size:14px; color:var(--gray-text); font-family:var(--font-body); font-weight:400;">RECEIPT</span></div>
+                    <table class="meta-table">
+                        <tr><td>เลขที่เอกสาร:</td><td id="pv-r-no">REC-20240101-01</td></tr>
+                        <tr><td>วันที่รับเงิน:</td><td id="pv-r-date">-</td></tr>
+                        <tr><td>อ้างอิงใบวางบิล:</td><td id="pv-r-ref">-</td></tr>
+                    </table>
+                </div>
+                <div class="address-box">
+                    <div class="address-col"><div class="address-title">ได้รับเงินจาก (Received From)</div><strong id="pv-r-cname">ชื่อลูกค้า</strong><br><span id="pv-r-caddr" style="white-space: pre-line;">ที่อยู่ลูกค้า...</span><br>เลขประจำตัวผู้เสียภาษี: <span id="pv-r-ctax">-</span></div>
+                    <div class="address-col"><div class="address-title">ผู้รับเงิน (Receiver)</div><strong id="pv-r-pvd-name">-</strong><br><span id="pv-r-pvd-addr" style="white-space: pre-line;">-</span><br><span id="pv-r-pvd-contact" style="white-space: pre-line;">-</span></div>
+                </div>
+                <table class="items-table">
+                    <thead><tr><th>รายการ / Description</th><th class="text-right" style="width:25%;">จำนวนเงิน (บาท)</th></tr></thead>
+                    <tbody><tr><td>ชำระค่าบริการ: <strong id="pv-r-pname">ชื่อโครงการ</strong><br><span id="pv-r-pdetail" style="color:#555; white-space: pre-line;">รายละเอียด</span></td><td class="text-right" id="pv-r-ptotal">0.00</td></tr></tbody>
+                </table>
+                <div class="summary-box" style="justify-content: flex-end;">
+                    <table class="totals-table">
+                        <tr><td class="text-right">รวมเป็นเงิน (Subtotal)</td><td class="text-right" id="pv-r-sub">0.00</td></tr>
+                        <tr id="row-r-wht"><td class="text-right">หักภาษี ณ ที่จ่าย 3%</td><td class="text-right" id="pv-r-whtval">-0.00</td></tr>
+                        <tr><td class="text-right grand-total">รับชำระสุทธิ (Net Paid)</td><td class="text-right grand-total" id="pv-r-grand">0.00</td></tr>
+                    </table>
+                </div>
+                <div class="thai-baht-text" id="pv-r-text">(ศูนย์บาทถ้วน)</div>
+                <div class="signatures">
+                    <div class="sig-box"></div> 
+                    <div class="sig-box"><div class="sig-line"><img id="r-sig-img" src="sig.png" class="sig-img" style="display:block;" onerror="this.style.display='none'"></div><span id="pv-r-sig-name">-</span><br>ผู้รับเงิน</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================== ใบเสนอราคา ================== -->
+    <div id="page-quotation" class="document-page">
+        <!-- แผ่นที่ 1: หน้าปก -->
+        <div class="pdf-sheet cover-page">
+            <div class="cover-title">ใบเสนอราคา<br><span style="font-size:20px; font-weight:400; color:#555;">QUOTATION / SCOPE OF WORK</span></div>
+            <div class="cover-subtitle" id="cv-q-pname">ชื่อโครงการ</div>
+            <div class="cover-date" id="cv-q-date">วันที่ -</div>
+            <div class="cover-details">
+                <table style="width: 100%; border-collapse: collapse; font-size: 16px;">
+                    <tr><td style="width: 150px; font-weight: 600; padding: 5px 0;">เรียน (ลูกค้า)</td><td>: <span id="cv-q-cname">-</span></td></tr>
+                    <tr><td style="font-weight: 600; padding: 5px 0;">สถานที่ตั้ง</td><td>: <span id="cv-q-ploc">-</span></td></tr>
+                    <tr><td style="font-weight: 600; padding: 5px 0;">พื้นที่โดยประมาณ</td><td>: <span id="cv-q-psize">-</span></td></tr>
+                </table>
+            </div>
+            
+            <div style="flex-grow: 1;"></div>
+            
+            <div class="cover-footer">
+                <p style="font-size: 16px;"><strong>สรุปค่าบริการวิชาชีพ: <span id="cv-q-price-num" style="text-decoration: underline;">0.00</span> บาท</strong> <span id="cv-q-price-text" style="font-style: italic; font-size: 14px; margin-left: 10px;">(ศูนย์บาทถ้วน)</span></p>
+                
+                <p style="margin-top: 20px; text-indent: 40px; text-align: justify;">
+                    หากขอบเขตของงานดังกล่าวตรงกับวัตถุประสงค์ของท่าน กรุณาตอบกลับและส่งสำเนา 1 ชุดกลับมาที่ผู้ออกแบบเพื่อเริ่มดำเนินการ
+                </p>
+                
+                <div style="margin-top: 40px; text-align: right; padding-right: 40px;">
+                    <p>ขอแสดงความนับถือ</p>
+                    <div style="border-bottom: 1px solid #111; width: 220px; margin: 40px 0 10px auto;"></div>
+                    <p id="cv-q-sig-name">ผู้ออกแบบ</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- แผ่นที่ 2: เนื้อหา (ส่วนที่ 1) -->
+        <div class="pdf-sheet content-wrap">
+            <img src="watermark.png" class="watermark" onerror="this.style.display='none'">
+            <div class="doc-header" style="border-bottom:none; margin-bottom:0; display:flex; justify-content:space-between; align-items:flex-start;">
+                <div style="flex: 1; padding-right: 20px;">
+                    <div class="doc-title" style="font-size:20px;">ใบเสนอราคา / ขอบเขตงาน (Quotation)</div>
+                    <div style="font-size:12px; margin-top:5px; line-height: 1.4;">
+                        <strong id="pv-q-pvd-name">-</strong><br>
+                        <span id="pv-q-pvd-addr" style="white-space: pre-line;">-</span><br>
+                        <span id="pv-q-pvd-contact" style="white-space: pre-line;">-</span>
+                    </div>
+                </div>
+                <table class="meta-table" style="width: 170px; flex-shrink: 0; text-align: left;">
+                    <tr><td style="text-align:right;">วันที่:</td><td id="pv-q-date" style="white-space: nowrap;">-</td></tr>
+                    <tr><td style="text-align:right;">เลขที่:</td><td id="pv-q-no" style="white-space: nowrap;">QUO-20240101</td></tr>
+                </table>
+            </div>
+            <hr style="border:0; border-top:2px solid var(--black); margin:15px 0;">
+
+            <div class="q-section">
+                <div class="q-head">1. ข้อมูลโครงการเบื้องต้น</div>
+                <p style="margin: 0 0 10px 10px; text-indent: 40px; text-align: justify; line-height: 1.6;">
+                    ผู้ออกแบบได้ทำการสรุปรายละเอียดของโครงการตามข้อมูลที่ได้รับจากเจ้าของโครงการเพื่อใช้ในการจัดทำใบเสนอราคาและใช้ในการอ้างอิงของทั้งสองฝ่าย โดยมีรายละเอียดดังนี้
+                </p>
+                <table style="width:100%; margin-left:10px; line-height: 1.8;">
+                    <tr><td style="width:150px;">- ชื่อโครงการ</td><td>: <strong id="pv-q-info-pname">-</strong></td></tr>
+                    <tr><td>- ประเภทอาคาร</td><td>: <strong id="pv-q-info-btype">-</strong></td></tr>
+                    <tr><td>- สถานที่ตั้ง</td><td>: <strong id="pv-q-info-ploc">-</strong></td></tr>
+                    <tr><td>- ขนาดพื้นที่</td><td>: <strong id="pv-q-info-psize">-</strong></td></tr>
+                    <tr><td>- จำนวนชั้น</td><td>: <strong id="pv-q-info-floors">-</strong></td></tr>
+                </table>
+            </div>
+
+            <div class="q-section">
+                <img id="pv-q-img" class="q-img-preview">
+            </div>
+
+            <div class="q-section">
+                <div class="q-head">2. ขอบเขตงานบริการวิชาชีพ (Scope of Services)</div>
+                <ul class="q-list" id="pv-q-scope"></ul>
+            </div>
+
+            <div class="q-section">
+                <div class="q-head">3. ขั้นตอนและระยะเวลาดำเนินการ (Timeline)</div>
+                <table style="width:100%; margin-left:10px;" id="pv-q-timeline">
+                </table>
+            </div>
+        </div>
+
+        <!-- แผ่นที่ 3: เนื้อหา (ส่วนที่ 2 - ต่อจากแผ่น 2) -->
+        <div class="pdf-sheet content-wrap">
+            <img src="watermark.png" class="watermark" onerror="this.style.display='none'">
+            <div class="doc-header" style="border-bottom:none; margin-bottom:0; display:flex; justify-content:space-between; align-items:flex-start;">
+                <div style="flex: 1; padding-right: 20px;">
+                    <div class="doc-title" style="font-size:20px;">ใบเสนอราคา / ขอบเขตงาน (ต่อ)</div>
+                </div>
+                <table class="meta-table" style="width: 170px; flex-shrink: 0; text-align: left;">
+                    <tr><td style="text-align:right;">วันที่:</td><td id="pv-q-date2" style="white-space: nowrap;">-</td></tr>
+                    <tr><td style="text-align:right;">เลขที่:</td><td id="pv-q-no2" style="white-space: nowrap;">QUO-20240101</td></tr>
+                </table>
+            </div>
+            <hr style="border:0; border-top:2px solid var(--black); margin:15px 0;">
+
+            <div class="q-section">
+                <div class="q-head">4. ค่าบริการวิชาชีพ และ งวดการชำระเงิน</div>
+                <div style="margin-left:10px; margin-bottom:10px; line-height:1.6;">
+                    ทีมผู้ออกแบบขอเรียนเสนอราคาค่าบริการวิชาชีพดังนี้<br>
+                    ค่าบริการวิชาชีพ: <strong style="font-size:14px; text-decoration:underline;" id="pv-q-price">0.00</strong> บาท <br>
+                    <span id="pv-q-text" style="font-size:12px; font-style:italic;">(ศูนย์บาทถ้วน)</span>
+                </div>
+                <table style="width:100%; margin-left:10px; margin-bottom: 15px; line-height:1.6;" id="pv-q-install">
+                </table>
+                <div style="margin-left:10px; font-size:11px; color:#333; line-height: 1.6;">
+                    <p style="margin-bottom:10px;">ทีมผู้ออกแบบจะยื่นหนังสือแจ้งชำระเงิน ตามขั้นตอนการทำงานข้างต้น ทั้งนี้มีการกำหนดการชำระเงินภายใน 7 วันนับจากวันได้รับหนังสือแจ้ง</p>
+                    <strong>หมายเหตุ:</strong><br>
+                    - ไม่รวมการรองรับเป็นผู้คุมงานสถาปัตยกรรมและงานวิศวกรรมโครงสร้างและงานระบบ<br>
+                    - ไม่รวมการรับรองเป็นผู้คุมงานและวิศวกรรมงานระบบ<br>
+                    - อัตราค่าบริการดังกล่าว ไม่รวมภาษีมูลค่าเพิ่ม 7%
+                </div>
+            </div>
+
+            <div class="terms-text" style="margin-top:15px;">
+                <strong>5. เงื่อนไขมาตรฐานและสิ่งที่ไม่ได้รวมในค่าบริการ</strong><br>
+                <div id="pv-q-terms" style="margin-top: 5px;"></div>
+            </div>
+
+            <!-- หัวข้อ 6, 7, 8 ที่เพิ่มมาใหม่ -->
+            <div class="q-section" style="margin-top: 15px;">
+                <strong>6. การอนุมัติแบบ</strong>
+                <p style="margin: 5px 0 0 10px; line-height: 1.6; font-size: 11px; color: #333;">
+                    เมื่อทีมผู้ออกแบบจะส่งแบบ เอกสารประกอบแบบ และ/หรือ เอกสารอื่นใด ไปยังสถานที่ที่เจ้าของงานได้ระบุไว้ เพื่อขออนุมัติจากเจ้าของงาน ให้ทางเจ้าของงาน แจ้งกลับทีมผู้ออกแบบเป็นลายลักษณ์อักษร หรือทาง Email
+                </p>
+            </div>
+
+            <div class="q-section" style="margin-top: 15px;">
+                <strong>7. หน้าที่เบื้องต้นของเจ้าของงาน</strong>
+                <p style="margin: 5px 0 0 10px; line-height: 1.6; font-size: 11px; color: #333;">
+                    เจ้าของงานมีหน้าที่จัดเตรียมข้อมูล และดำเนินการตามความเหมาะสม เพื่อให้งานออกแบบเป็นไปอย่างมีประสิทธิภาพ ดังนี้<br>
+                    - แต่งตั้งตัวแทนที่มีอำนาจในการตัดสินใจ เป็นผู้รับผิดชอบโครงการและประสานงาน<br>
+                    - รายละเอียดและข้อมูลอื่นๆ ที่มีความสำคัญและเป็นประโยชน์ต่อการออกแบบในโครงการนี้
+                </p>
+            </div>
+
+            <div class="q-section" style="margin-top: 15px;">
+                <strong>8. การบอกเลิกจ้าง</strong>
+                <p style="margin: 5px 0 0 10px; line-height: 1.6; font-size: 11px; color: #333;">
+                    หากเจ้าของงานประสงค์จะบอกเลิกสัญญานี้ จะต้องแจ้งให้ทีมผู้ออกแบบทราบเป็นลายลักษณ์อักษรล่วงหน้าเป็นเวลาไม่น้อยกว่า 15 วัน และตกลงที่จะจ่ายค่าจ้างให้ทีมผู้ออกแบบตามสัดส่วนของผลงานที่ทีมผู้ออกแบบได้ทำไปแล้ว
+                </p>
+            </div>
+        </div>
+
+        <!-- แผ่นที่ 4: หน้าลายเซ็น (ดันข้อความขึ้น) -->
+        <div class="pdf-sheet signature-page">
+            <h3 style="font-family: var(--font-head); font-size: 20px; text-align: center; margin-bottom: 30px;">การอนุมัติและยืนยันสั่งจ้าง</h3>
+            <p style="text-align: center; font-size: 14px; line-height: 1.8;">
+                ข้าพเจ้าได้ตรวจสอบรายละเอียดขอบเขตงาน ขั้นตอนการดำเนินงาน <br>
+                รวมถึงค่าบริการวิชาชีพและเงื่อนไขต่างๆ ตามที่ระบุในใบเสนอราคาฉบับนี้เรียบร้อยแล้ว <br>
+                และตกลงให้ดำเนินการตามที่เสนอมาทุกประการ
+            </p>
+            
+            <div style="flex-grow: 1;"></div> <!-- ตัวดันให้ลายเซ็นลงไปอยู่ข้างล่าง -->
+
+            <div class="signatures" style="margin-top: auto; margin-bottom: 40mm;">
+                <div class="sig-box">
+                    <div class="sig-line"></div>
+                    ผู้อนุมัติ / เจ้าของโครงการ<br>
+                    วันที่ _______/_______/_______
+                </div>
+                <div class="sig-box">
+                    <div class="sig-line"><img id="q-sig-img" src="sig.png" class="sig-img" style="display:block;" onerror="this.style.display='none'"></div>
+                    <span id="pv-q-sig-name">-</span><br>
+                    สถาปนิกผู้ออกแบบ
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const today = new Date();
+    const dateStr = today.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
+    const ymdStr = today.getFullYear() + String(today.getMonth()+1).padStart(2,'0') + String(today.getDate()).padStart(2,'0');
+    let currentMode = 'billing';
+
+    let customerDB = JSON.parse(localStorage.getItem('archCustomerDB')) || {
+        'C-001': { name: 'บริษัท ตัวอย่างงานดี จำกัด', addr: '123/45 แขวงจตุจักร เขตจตุจักร กรุงเทพฯ 10900', tax: '0105563000123' }
+    };
+
+    let bTypesDB = JSON.parse(localStorage.getItem('archBuildingTypes')) || [
+        { id: 1, name: 'อาคารพักอาศัย/บ้าน', price: 15000, percent: 5 },
+        { id: 2, name: 'อาคารหอพัก/อพาร์ทเมนท์', price: 18000, percent: 3 },
+        { id: 3, name: 'คาเฟ่/ร้านอาหาร', price: 20000, percent: 7 }
+    ];
+
+    let timelines = [
+        { name: 'การเตรียมการเบื้องต้น', detail: 'รวบรวมข้อมูล ความต้องการ และงบประมาณจากเจ้าของโครงการ', weeks: 'ข้อมูลจากเจ้าของ' },
+        { name: 'ออกแบบร่างขั้นต้น (Conceptual Design)', detail: 'จัดทำผังบริเวณ, แปลนพื้น, และรูปด้านเบื้องต้น', weeks: '4 สัปดาห์' },
+        { name: 'พัฒนาแบบ (Design Development)', detail: 'พัฒนารูปแบบสถาปัตยกรรม โครงสร้าง และระบบต่างๆ ให้ชัดเจนขึ้น', weeks: '3 สัปดาห์' },
+        { name: 'เขียนแบบขออนุญาตก่อสร้าง', detail: 'จัดทำแบบสำหรับยื่นขออนุญาตก่อสร้างกับหน่วยราชการ', weeks: '4 สัปดาห์' },
+        { name: 'เขียนแบบก่อสร้าง (Construction Document)', detail: 'จัดทำแบบรายละเอียดสำหรับการก่อสร้างและประเมินราคา', weeks: '3 สัปดาห์' }
+    ];
+
+    let installments = [
+        { name: 'ทำสัญญาก่อนเริ่มงานออกแบบ', percent: 20 },
+        { name: 'ส่งมอบแบบร่างขั้นต้น (Conceptual Design)', percent: 30 },
+        { name: 'ส่งมอบแบบขออนุญาตก่อสร้าง', percent: 30 },
+        { name: 'ส่งมอบแบบก่อสร้างฉบับสมบูรณ์ (Final)', percent: 20 }
+    ];
+
+    // เงื่อนไข 17 ข้อ ที่ติ๊กเข้าออก/ลบได้ในเมนู
+    let termsList = [
+        { active: true, text: "งานออกแบบระบบเครื่องเสียงที่มีลักษณะเฉพาะ, โทรทัศน์วงจรปิด (CCTV), ระบบรับสัญญาณดาวเทียม (AV System)" },
+        { active: true, text: "การสำรวจสภาพดิน และชั้นดิน รวมถึงการหาข้อมูลต่าง ๆ เกี่ยวกับที่ดิน หรือทรัพย์สินอื่นๆ ในที่ดิน" },
+        { active: true, text: "การบริหารงานก่อสร้าง, การควบคุมงานการสร้าง และการรับรองเป็นผู้ควบคุมงาน การบริการที่ปรึกษาและการบริหารงานก่อสร้าง (CM) การจัดทำราคากลางและการจัดเตรียมเอกสารใดๆ" },
+        { active: true, text: "ประมูลงานก่อสร้างและ/หรือเพื่อทำสัญญาจ้างผู้รับเหมา นอกเหนือจากที่ระบุในสัญญาฉบับนี้" },
+        { active: true, text: "ค่าใช้จ่ายต่างๆ ในการจัดทำ จัดหาหรือเช่าภาพประกอบ, อุปกรณ์ตกแต่ง หรือรวมถึงค่าลิขสิทธิ์ใดๆ เพื่อนำมาประกอบในงานออกแบบ (หากต้องมี)" },
+        { active: true, text: "การจัดทำแบบจำลองสามมิติ (Model) เพื่อใช้ประกอบการขาย/ประชาสัมพันธ์โครงการ และค่าจัดทำต้นแบบอื่นๆ เพื่อประกอบการพิจารณาตัดสินใจ" },
+        { active: true, text: "การดำเนินการด้านกฎหมาย การตรวจสอบ และ/หรือการติดต่อหน่วยงานราชการ เพื่อขอข้อมูลหรือขออนุญาตปลูกสร้าง" },
+        { active: true, text: "ค่าใช้จ่ายในการพิมพ์แบบและรายการประกอบแบบต่างๆ เพิ่มเติมรวมทั้งค่าจัดส่งแบบ นอกเหนือจากที่ระบุไว้ในเอกสารฉบับนี้" },
+        { active: true, text: "การว่าจ้างผู้เชี่ยวชาญแขนงอื่นที่จำเป็นต่อโครงการ อาทิเช่นผู้เชี่ยวชาญพิเศษด้านจราจร" },
+        { active: true, text: "การทำงานเพื่อการแก้ไขเปลี่ยนแปลงแบบ, รายละเอียดประกอบแบบ หรือเอกสารอื่นใด ที่ได้รับการอนุมัติจากเจ้าของงานแล้ว ซึ่งการเปลี่ยนแปลงดังกล่าวมิได้เกิดเนื่องจากความผิดของทีมผู้ออกแบบ" },
+        { active: true, text: "ค่าใช้จ่ายในการเดินทาง และ/หรือ ที่พัก ในกรณีที่ต้องเดินทาง หรือได้รับคำสั่งจากเจ้าของงาน ให้ไปปฏิบัติงาน ณ สถานที่ก่อสร้างที่อยู่นอกเขต กรุงเทพ และปริมณฑล" },
+        { active: true, text: "การเซ็นควบคุม งานสถาปัตยกรรม งานวิศวกรรมโครงสร้าง และงานวิศวกรรมงานระบบ" },
+        { active: true, text: "การจัดทำ Shop Drawing (เป็นงานในส่วนความรับผิดชอบของผู้รับเหมา)" },
+        { active: true, text: "การจัดทำ Black Form" },
+        { active: true, text: "การสำรวจความเป็นไปได้ของโครงการ (Feasibility Studies)" },
+        { active: true, text: "การศึกษา งบประมาณโครงการ (Project Budgeting)" },
+        { active: true, text: "การจัดทำ 3D Animation สำหรับส่งเสริมการขาย ถ้าต้องการ ทีมผู้ออกแบบ จะจัดทำให้ โดยมีค่าดำเนินการค่าจัดทำ 3D Animation 50,000-350,000 บาท" }
+    ];
+
+    document.getElementById('pv-b-date').innerText = dateStr;
+    document.getElementById('pv-r-date').innerText = dateStr;
+    document.getElementById('pv-q-date').innerText = dateStr;
+    document.getElementById('pv-q-date2').innerText = dateStr;
+    document.getElementById('cv-q-date').innerText = "วันที่ " + dateStr;
+    
+    document.getElementById('pv-b-no').innerText = 'INV-' + ymdStr + '-01';
+    document.getElementById('pv-r-no').innerText = 'REC-' + ymdStr + '-01';
+    document.getElementById('pv-q-no').innerText = 'QUO-' + ymdStr + '-01';
+    document.getElementById('pv-q-no2').innerText = 'QUO-' + ymdStr + '-01';
+    document.getElementById('pv-b-cid').innerText = 'C-001';
+    document.getElementById('r-date').valueAsDate = today;
+
+    function initSettings() {
+        updateCustomerDropdown();
+        renderBTypes();
+        renderTimelineForm();
+        renderInstallmentForm();
+        renderTermsForm();
+    }
+
+    function renderTermsForm() {
+        let box = document.getElementById('q-terms-container');
+        box.innerHTML = '';
+        termsList.forEach((t, i) => {
+            let isChecked = t.active ? 'checked' : '';
+            box.innerHTML += `
+            <div class="dynamic-row" style="align-items:flex-start;">
+                <input type="checkbox" style="width: 16px; height: 16px; margin-top:8px; cursor: pointer;" ${isChecked} onchange="termsList[${i}].active=this.checked; updatePreview()">
+                <textarea rows="2" style="flex:1; font-size:12px; resize:vertical; font-family:var(--font-body);" oninput="termsList[${i}].text=this.value; updatePreview()">${t.text}</textarea>
+            </div>`;
+        });
+    }
+    function addTermRow() {
+        termsList.push({ active: true, text: "เงื่อนไขใหม่..." });
+        renderTermsForm(); updatePreview();
+    }
+
+    function renderBTypes() {
+        let select = document.getElementById('q-btype');
+        let tbody = document.querySelector('#btype-table tbody');
+        
+        select.innerHTML = '<option value="">-- เลือกประเภทอาคาร --</option>';
+        tbody.innerHTML = '';
+
+        bTypesDB.forEach(bt => {
+            let opt = document.createElement('option');
+            opt.value = bt.id;
+            opt.innerText = bt.name;
+            select.appendChild(opt);
+
+            let tr = document.createElement('tr');
+            tr.innerHTML = `<td>${bt.name}</td><td>${formatNumber(bt.price)}</td><td>${bt.percent}%</td>
+                            <td><button class="btn-danger" onclick="delBType(${bt.id})">ลบ</button></td>`;
+            tbody.appendChild(tr);
+        });
+    }
+    function addBType() {
+        let name = document.getElementById('new-bt-name').value;
+        let price = parseFloat(document.getElementById('new-bt-price').value) || 0;
+        let percent = parseFloat(document.getElementById('new-bt-percent').value) || 0;
+        if(name && price && percent) {
+            bTypesDB.push({ id: Date.now(), name, price, percent });
+            localStorage.setItem('archBuildingTypes', JSON.stringify(bTypesDB));
+            document.getElementById('new-bt-name').value = '';
+            document.getElementById('new-bt-price').value = '';
+            document.getElementById('new-bt-percent').value = '';
+            renderBTypes();
+        } else alert("กรอกข้อมูลให้ครบดิวะ!");
+    }
+    function delBType(id) {
+        bTypesDB = bTypesDB.filter(bt => bt.id !== id);
+        localStorage.setItem('archBuildingTypes', JSON.stringify(bTypesDB));
+        renderBTypes();
+    }
+    function calcGuideFee() {
+        let size = parseFloat(document.getElementById('q-proj-size').value) || 0;
+        let btId = document.getElementById('q-btype').value;
+        let bt = bTypesDB.find(b => b.id == btId);
+        
+        let guideText = document.getElementById('guide-fee-text');
+        if(size > 0 && bt) {
+            let totalConstruct = size * bt.price;
+            let fee = totalConstruct * (bt.percent / 100);
+            guideText.innerText = `(คำนวณอัตโนมัติ: ${formatNumber(fee)} บาท)`;
+        } else {
+            guideText.innerText = '';
+        }
+        updatePreview();
+    }
+
+    function renderTimelineForm() {
+        let box = document.getElementById('q-timeline-container');
+        box.innerHTML = '';
+        timelines.forEach((t, i) => {
+            box.innerHTML += `
+            <div style="border:1px solid #ddd; padding:5px; margin-bottom:5px; background:#fff; position:relative;">
+                <div style="display:flex; gap:5px; margin-bottom:5px;">
+                    <input type="text" style="flex:2;" placeholder="ชื่อขั้นตอน" value="${t.name}" oninput="timelines[${i}].name=this.value; updatePreview()">
+                    <input type="text" style="flex:1;" placeholder="ระยะเวลา" value="${t.weeks}" oninput="timelines[${i}].weeks=this.value; updatePreview()">
+                    <button class="btn-danger" style="position:absolute; top:5px; right:5px; padding:2px 6px;" onclick="removeTimelineRow(${i})">X</button>
+                </div>
+                <textarea rows="1" style="width:100%; font-size:12px; padding:5px; resize:vertical; font-family:var(--font-body);" placeholder="รายละเอียด (พิมพ์อธิบายเพิ่มได้)..." oninput="timelines[${i}].detail=this.value; updatePreview()">${t.detail || ''}</textarea>
+            </div>`;
+        });
+    }
+    function addTimelineRow() {
+        timelines.push({ name: 'ขั้นตอนใหม่', detail: '', weeks: 'X สัปดาห์' });
+        renderTimelineForm(); updatePreview();
+    }
+    function removeTimelineRow(i) {
+        timelines.splice(i, 1);
+        renderTimelineForm(); updatePreview();
+    }
+
+    function renderInstallmentForm() {
+        let box = document.getElementById('q-install-container');
+        box.innerHTML = '';
+        installments.forEach((ins, i) => {
+            box.innerHTML += `
+            <div class="dynamic-row">
+                <input type="text" style="flex:2;" value="${ins.name}" oninput="installments[${i}].name=this.value; updatePreview()">
+                <input type="number" style="width:60px;" value="${ins.percent}" oninput="installments[${i}].percent=this.value; updatePreview()"> <span style="font-size:12px;">%</span>
+                <button class="btn-danger" onclick="removeInstallmentRow(${i})">X</button>
+            </div>`;
+        });
+    }
+    function addInstallmentRow() {
+        installments.push({ name: 'งวดที่ X', percent: 10 });
+        renderInstallmentForm(); updatePreview();
+    }
+    function removeInstallmentRow(i) {
+        installments.splice(i, 1);
+        renderInstallmentForm(); updatePreview();
+    }
+
+    function updateCustomerDropdown() {
+        let select = document.getElementById('b-cust-code');
+        select.innerHTML = '<option value="">-- เลือกรหัสลูกค้า --</option>';
+        for (let code in customerDB) {
+            let opt = document.createElement('option');
+            opt.value = code;
+            opt.innerText = `${code} : ${customerDB[code].name}`;
+            select.appendChild(opt);
+        }
+    }
+    function selectCustomer() {
+        let code = document.getElementById('b-cust-code').value;
+        if (code && customerDB[code]) {
+            document.getElementById('b-cust-name').value = customerDB[code].name;
+            document.getElementById('b-cust-addr').value = customerDB[code].addr;
+            document.getElementById('b-cust-tax').value = customerDB[code].tax;
+            document.getElementById('pv-b-cid').innerText = code;
+            updatePreview();
+        }
+    }
+    function saveCurrentCustomer() {
+        let code = prompt("กรอกรหัสลูกค้าที่ต้องการบันทึกหรือแก้ไข (เช่น C-003):");
+        if (!code) return;
+        let name = document.getElementById('b-cust-name').value;
+        let addr = document.getElementById('b-cust-addr').value;
+        let tax = document.getElementById('b-cust-tax').value;
+        if (!name) { alert("ใส่ชื่อลูกค้าก่อนสิฟะ!"); return; }
+        customerDB[code] = { name, addr, tax };
+        localStorage.setItem('archCustomerDB', JSON.stringify(customerDB));
+        updateCustomerDropdown();
+        document.getElementById('b-cust-code').value = code;
+        document.getElementById('pv-b-cid').innerText = code;
+        alert(`บันทึกเรียบร้อยแล้วมึง!`);
+    }
+
+    function switchTab(tab) {
+        currentMode = tab;
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.form-section').forEach(sec => sec.classList.remove('active'));
+        document.querySelectorAll('.document-page').forEach(page => page.classList.remove('active'));
+        
+        event.target.classList.add('active');
+        document.getElementById('form-' + tab).classList.add('active');
+        if(tab !== 'history') {
+            document.getElementById('page-' + tab).classList.add('active');
+            updatePreview();
+        } else {
+            loadHistory();
+        }
+    }
+
+    function formatNumber(num) { return num.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+
+    function ArabicNumberToText(Number) {
+        let NumberStr = Number.toString().replace(/,/g, '');
+        let parts = NumberStr.split('.');
+        let intPart = parts[0];
+        let decPart = parts.length > 1 ? parts[1].padEnd(2, '0').substring(0, 2) : '00';
+        if (intPart === '0' && decPart === '00') return "ศูนย์บาทถ้วน";
+        const text = ["ศูนย์", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"];
+        const unit = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน", "ล้าน"];
+        function convert(numStr) {
+            let res = ""; let len = numStr.length;
+            for(let i=0; i<len; i++) {
+                let d = parseInt(numStr.charAt(i)); let pos = len - i - 1;
+                if(d !== 0) {
+                    if(pos === 1 && d === 1) res += unit[pos];
+                    else if(pos === 1 && d === 2) res += "ยี่" + unit[pos];
+                    else if(pos === 0 && d === 1 && len > 1 && numStr.charAt(i-1) !== '0') res += "เอ็ด" + unit[pos];
+                    else res += text[d] + unit[pos];
+                }
+            }
+            return res;
+        }
+        let result = convert(intPart) + "บาท";
+        if(decPart === '00') result += "ถ้วน"; else result += convert(decPart) + "สตางค์";
+        return `(${result})`;
+    }
+
+    function updatePreview() {
+        let pvdName = document.getElementById('p-name').value || '-';
+        let pvdAddr = document.getElementById('p-addr').value || '-';
+        let pvdContact = document.getElementById('p-contact').value || '-';
+        let pvdBank = document.getElementById('p-bank').value || '-';
+        let pvdBankAcc = document.getElementById('p-bank-acc').value || '-';
+        let pvdBankNo = document.getElementById('p-bank-no').value || '-';
+
+        if(currentMode === 'billing' || currentMode === 'receipt') {
+            let cname = document.getElementById('b-cust-name').value || '-';
+            let caddr = document.getElementById('b-cust-addr').value || '-';
+            let ctax = document.getElementById('b-cust-tax').value || '-';
+            let pname = document.getElementById('b-proj-name').value || '-';
+            let pdetail = document.getElementById('b-proj-detail').value || '-';
+            let qty = parseFloat(document.getElementById('b-qty').value) || 0;
+            let price = parseFloat(document.getElementById('b-price').value) || 0;
+            let isWht = document.getElementById('b-wht').checked;
+
+            let subtotal = qty * price;
+            let whtVal = isWht ? subtotal * 0.03 : 0;
+            let grandTotal = subtotal - whtVal;
+
+            document.getElementById('pv-b-cname').innerText = cname;
+            document.getElementById('pv-b-caddr').innerText = caddr;
+            document.getElementById('pv-b-ctax').innerText = ctax;
+            document.getElementById('pv-b-pvd-name').innerText = pvdName;
+            document.getElementById('pv-b-pvd-addr').innerText = pvdAddr;
+            document.getElementById('pv-b-pvd-contact').innerText = pvdContact;
+            document.getElementById('pv-b-pvd-bank').innerText = pvdBank;
+            document.getElementById('pv-b-pvd-bankacc').innerText = pvdBankAcc;
+            document.getElementById('pv-b-pvd-bankno').innerText = pvdBankNo;
+            document.getElementById('pv-b-sig-name').innerText = pvdName;
+
+            document.getElementById('pv-b-pname').innerText = pname;
+            document.getElementById('pv-b-pdetail').innerText = pdetail;
+            document.getElementById('pv-b-pqty').innerText = qty;
+            document.getElementById('pv-b-pprice').innerText = formatNumber(price);
+            document.getElementById('pv-b-ptotal').innerText = formatNumber(subtotal);
+            document.getElementById('pv-b-sub').innerText = formatNumber(subtotal);
+            document.getElementById('row-b-wht').style.display = isWht ? 'table-row' : 'none';
+            document.getElementById('pv-b-whtval').innerText = "-" + formatNumber(whtVal);
+            document.getElementById('pv-b-grand').innerText = formatNumber(grandTotal);
+            document.getElementById('pv-b-text').innerText = ArabicNumberToText(grandTotal);
+
+            // ซิงค์ Receipt
+            document.getElementById('pv-r-cname').innerText = cname;
+            document.getElementById('pv-r-caddr').innerText = caddr;
+            document.getElementById('pv-r-ctax').innerText = ctax;
+            document.getElementById('pv-r-pvd-name').innerText = pvdName;
+            document.getElementById('pv-r-pvd-addr').innerText = pvdAddr;
+            document.getElementById('pv-r-pvd-contact').innerText = pvdContact;
+            document.getElementById('pv-r-sig-name').innerText = pvdName;
+            document.getElementById('pv-r-pname').innerText = pname;
+            document.getElementById('pv-r-pdetail').innerText = pdetail;
+            document.getElementById('pv-r-ptotal').innerText = formatNumber(subtotal);
+            document.getElementById('pv-r-sub').innerText = formatNumber(subtotal);
+            document.getElementById('row-r-wht').style.display = isWht ? 'table-row' : 'none';
+            document.getElementById('pv-r-whtval').innerText = "-" + formatNumber(whtVal);
+            document.getElementById('pv-r-grand').innerText = formatNumber(grandTotal);
+            document.getElementById('pv-r-text').innerText = ArabicNumberToText(grandTotal);
+
+            let rDateInput = document.getElementById('r-date').value;
+            if(rDateInput) {
+                let d = new Date(rDateInput);
+                document.getElementById('pv-r-date').innerText = d.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
+            }
+            document.getElementById('pv-r-ref').innerText = document.getElementById('pv-b-no').innerText;
+
+        } else if (currentMode === 'quotation') {
+            document.getElementById('pv-q-pvd-name').innerText = pvdName;
+            document.getElementById('pv-q-pvd-addr').innerText = pvdAddr;
+            document.getElementById('pv-q-pvd-contact').innerText = pvdContact;
+            
+            document.getElementById('cv-q-sig-name').innerText = pvdName;
+            document.getElementById('pv-q-sig-name').innerText = pvdName;
+
+            let cname = document.getElementById('q-cust-name').value || '-';
+            let btypeSel = document.getElementById('q-btype');
+            let btext = btypeSel.options[btypeSel.selectedIndex]?.text || '-';
+            if(btypeSel.value === "") btext = '-';
+            
+            let pname = document.getElementById('q-proj-name').value || '-';
+            let pnameFull = (btypeSel.value !== "") ? `${btext} - ${pname}` : pname;
+            
+            let ploc = document.getElementById('q-proj-loc').value || '-';
+            let psize = (document.getElementById('q-proj-size').value || '0') + " ตร.ม.";
+            let floors = (document.getElementById('q-proj-floors').value || '1') + " ชั้น";
+
+            document.getElementById('cv-q-pname').innerText = pnameFull;
+            document.getElementById('cv-q-cname').innerText = cname;
+            document.getElementById('cv-q-ploc').innerText = ploc;
+            document.getElementById('cv-q-psize').innerText = psize;
+            
+            let qprice = parseFloat(document.getElementById('q-price').value) || 0;
+            document.getElementById('cv-q-price-num').innerText = formatNumber(qprice);
+            document.getElementById('cv-q-price-text').innerText = ArabicNumberToText(qprice);
+            document.getElementById('pv-q-price').innerText = formatNumber(qprice);
+            document.getElementById('pv-q-text').innerText = ArabicNumberToText(qprice);
+
+            document.getElementById('pv-q-info-pname').innerText = pname;
+            document.getElementById('pv-q-info-btype').innerText = btext;
+            document.getElementById('pv-q-info-ploc').innerText = ploc;
+            document.getElementById('pv-q-info-psize').innerText = psize;
+            document.getElementById('pv-q-info-floors').innerText = floors;
+
+            let scopes = [];
+            if(document.getElementById('q-s1').checked) scopes.push("งานออกแบบสถาปัตยกรรม");
+            if(document.getElementById('q-s2').checked) scopes.push("งานออกแบบโครงสร้างวิศวกรรม");
+            if(document.getElementById('q-s3').checked) scopes.push("งานออกแบบงานระบบไฟฟ้าและสุขาภิบาล");
+            if(document.getElementById('q-s4').checked) scopes.push("งานออกแบบตกแต่งภายใน (Interior Design)");
+            if(document.getElementById('q-s5').checked) scopes.push("งานออกแบบภูมิสถาปัตยกรรม (Landscape)");
+            if(document.getElementById('q-s6').checked) scopes.push("งานออกแบบวางผังเชิงแนวคิดโคกหนองนา");
+            document.getElementById('pv-q-scope').innerHTML = scopes.map(s => `<li>${s}</li>`).join('') || '<li>-</li>';
+
+            let tHtml = '';
+            timelines.forEach((t, i) => {
+                let detailHtml = (t.detail && t.detail.trim() !== '') ? `<div style="font-size:11px; color:#555; margin-left:15px; margin-top:2px; line-height: 1.4;">- ${t.detail.replace(/\n/g, '<br>')}</div>` : '';
+                tHtml += `<tr><td style="width:70%; padding-bottom:8px;"><strong>3.${i+1} ${t.name}</strong>${detailHtml}</td><td style="vertical-align:top; padding-top:2px;">${t.weeks}</td></tr>`;
+            });
+            document.getElementById('pv-q-timeline').innerHTML = tHtml;
+
+            let iHtml = '';
+            installments.forEach((ins, i) => {
+                let amt = qprice * (ins.percent / 100);
+                iHtml += `<tr><td style="width:70%;">- งวดที่ ${i+1} : ${ins.name} (${ins.percent}%)</td><td>เป็นเงิน <strong>${formatNumber(amt)}</strong> บาท</td></tr>`;
+            });
+            document.getElementById('pv-q-install').innerHTML = iHtml;
+
+            // เอา termsList มาเรียงใส่หน้ากระดาษแบบมีขีด (Dash)
+            let termHtml = '';
+            termsList.forEach((t) => { 
+                if (t.active && t.text.trim() !== '') {
+                    termHtml += `- ${t.text}<br>`; 
+                }
+            });
+            document.getElementById('pv-q-terms').innerHTML = termHtml;
+        }
+    }
+
+    function uploadImage(input, targetId) {
+        if (input.files && input.files[0]) {
+            let reader = new FileReader();
+            reader.onload = function(e) {
+                let img = document.getElementById('pv-' + targetId);
+                img.src = e.target.result;
+                img.style.display = 'block';
+            }
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    function uploadSignature(input, targetId) {
+        if (input.files && input.files[0]) {
+            let reader = new FileReader();
+            reader.onload = function(e) {
+                let img = document.getElementById(targetId + '-img');
+                img.src = e.target.result;
+                img.style.display = 'block';
+            }
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    function confirmPayment() {
+        let slip = document.getElementById('slip-upload').files[0];
+        if(!slip) { alert("แนบหลักฐานการโอนเงินก่อนสิเห้ย!"); return; }
+        alert("ยืนยันการชำระเงินเรียบร้อย ระบบจะพาไปยังหน้าใบเสร็จรับเงิน");
+        switchTab('receipt');
+        updatePreview();
+    }
+
+    function exportPDF(docType) {
+        let element = document.getElementById('page-' + docType);
+        
+        element.classList.add('exporting'); 
+        
+        let pname = (docType === 'quotation') ? document.getElementById('q-proj-name').value : document.getElementById('b-proj-name').value;
+        pname = pname || 'Project';
+        let docNameTH = docType === 'billing' ? 'ใบวางบิล' : (docType === 'receipt' ? 'ใบเสร็จ' : 'ใบเสนอราคา');
+        let filename = `${ymdStr}_${docNameTH}_${pname}.pdf`;
+
+        let opt = {
+            margin:       0,
+            filename:     filename,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak:    { mode: ['css', 'legacy'] }
+        };
+
+        html2pdf().set(opt).from(element).save().then(() => {
+            element.classList.remove('exporting');
+            saveToHistory(docType);
+        }).catch(err => {
+            element.classList.remove('exporting');
+            console.error(err);
+        });
+    }
+
+    function saveToHistory(docType) {
+        let history = JSON.parse(localStorage.getItem('archHistory')) || [];
+        let item = { id: Date.now(), date: dateStr, type: docType, data: {} };
+
+        if (docType === 'billing' || docType === 'receipt') {
+            item.project = document.getElementById('b-proj-name').value || 'ไม่ระบุชื่อโครงการ';
+            item.client = document.getElementById('b-cust-name').value || 'ไม่ระบุชื่อลูกค้า';
+            let qty = parseFloat(document.getElementById('b-qty').value) || 0;
+            let price = parseFloat(document.getElementById('b-price').value) || 0;
+            let subtotal = qty * price;
+            let isWht = document.getElementById('b-wht').checked;
+            item.total = isWht ? subtotal * 0.97 : subtotal;
+
+            item.data = {
+                'b-cust-name': document.getElementById('b-cust-name').value,
+                'b-cust-addr': document.getElementById('b-cust-addr').value,
+                'b-cust-tax': document.getElementById('b-cust-tax').value,
+                'b-proj-name': document.getElementById('b-proj-name').value,
+                'b-proj-detail': document.getElementById('b-proj-detail').value,
+                'b-qty': document.getElementById('b-qty').value,
+                'b-price': document.getElementById('b-price').value,
+                'b-wht': document.getElementById('b-wht').checked
+            };
+        } else if (docType === 'quotation') {
+            item.project = document.getElementById('q-proj-name').value || 'ไม่ระบุชื่อโครงการ';
+            item.client = document.getElementById('q-cust-name').value || 'ไม่ระบุชื่อลูกค้า';
+            item.total = parseFloat(document.getElementById('q-price').value) || 0;
+
+            item.data = {
+                'q-btype': document.getElementById('q-btype').value,
+                'q-cust-name': document.getElementById('q-cust-name').value,
+                'q-proj-name': document.getElementById('q-proj-name').value,
+                'q-proj-loc': document.getElementById('q-proj-loc').value,
+                'q-proj-size': document.getElementById('q-proj-size').value,
+                'q-proj-floors': document.getElementById('q-proj-floors').value,
+                'q-price': document.getElementById('q-price').value,
+                'q-s1': document.getElementById('q-s1').checked,
+                'q-s2': document.getElementById('q-s2').checked,
+                'q-s3': document.getElementById('q-s3').checked,
+                'q-s4': document.getElementById('q-s4').checked,
+                'q-s5': document.getElementById('q-s5').checked,
+                'q-s6': document.getElementById('q-s6').checked,
+                'timelines_saved': JSON.parse(JSON.stringify(timelines)),
+                'install_saved': JSON.parse(JSON.stringify(installments)),
+                'terms_saved': JSON.parse(JSON.stringify(termsList))
+            };
+        }
+
+        history.unshift(item);
+        localStorage.setItem('archHistory', JSON.stringify(history));
+    }
+
+    function loadHistory() {
+        let container = document.getElementById('history-container');
+        container.innerHTML = '';
+        let history = JSON.parse(localStorage.getItem('archHistory')) || [];
+        
+        if(history.length === 0) {
+            container.innerHTML = '<p style="font-size:12px; color:var(--gray-text);">ไม่มีประวัติเอกสารเลยสักใบ</p>';
+            return;
+        }
+
+        let groups = {
+            'billing': { title: '📌 หมวด: ใบวางบิล', items: [] },
+            'receipt': { title: '📌 หมวด: ใบเสร็จรับเงิน', items: [] },
+            'quotation': { title: '📌 หมวด: ใบเสนอราคา', items: [] }
+        };
+
+        history.forEach((h, index) => {
+            h.originalIndex = index; 
+            if(groups[h.type]) groups[h.type].items.push(h);
+        });
+
+        for (let key in groups) {
+            if (groups[key].items.length > 0) {
+                let groupTitle = document.createElement('h4');
+                groupTitle.style.cssText = 'margin: 20px 0 10px 0; border-bottom: 2px solid #ddd; padding-bottom: 5px; color: var(--black); font-size: 14px;';
+                groupTitle.innerText = groups[key].title;
+                container.appendChild(groupTitle);
+
+                let list = document.createElement('ul');
+                list.className = 'history-list';
+
+                groups[key].items.forEach(h => {
+                    let li = document.createElement('li');
+                    li.className = 'history-item';
+                    li.onclick = () => loadHistoryItem(h.originalIndex);
+                    
+                    let docNameTH = h.type === 'billing' ? 'ใบวางบิล' : (h.type === 'receipt' ? 'ใบเสร็จ' : 'ใบเสนอราคา');
+                    let priceFormat = formatNumber(h.total || 0);
+                    
+                    li.innerHTML = `<div class="history-title">${docNameTH} | ${h.project} | ${priceFormat} บาท</div>
+                                    <div style="color:var(--gray-text);">ลูกค้า: ${h.client} | วันที่เซฟ: ${h.date}</div>`;
+                    list.appendChild(li);
+                });
+                container.appendChild(list);
+            }
+        }
+    }
+
+    function loadHistoryItem(index) {
+        let history = JSON.parse(localStorage.getItem('archHistory')) || [];
+        let item = history[index];
+        if(!item || !item.data) { alert('โหลดข้อมูลไม่ได้ว่ะ!'); return; }
+
+        if(confirm('จะโหลดข้อมูลนี้ขึ้นมาแก้ใช่ไหมมึง? (ข้อมูลที่พิมพ์ค้างอยู่จะหายนะ!)')) {
+            for(let key in item.data) {
+                if(key === 'timelines_saved') {
+                    // ป้องกัน error ถ้าข้อมูลเก่าไม่มี detail
+                    timelines = item.data[key].map(t => ({...t, detail: t.detail || ''}));
+                    renderTimelineForm();
+                } else if(key === 'install_saved') {
+                    installments = item.data[key];
+                    renderInstallmentForm();
+                } else if(key === 'terms_saved') {
+                    let loadedTerms = item.data[key];
+                    // เช็คกันเหนียวให้รองรับประวัติเก่าที่เป็นแค่ String ล้วน
+                    if (loadedTerms.length > 0 && typeof loadedTerms[0] === 'string') {
+                        termsList = loadedTerms.map(t => ({ active: true, text: t }));
+                    } else {
+                        termsList = loadedTerms;
+                    }
+                    renderTermsForm();
+                } else {
+                    let el = document.getElementById(key);
+                    if(el) {
+                        if(el.type === 'checkbox') el.checked = item.data[key];
+                        else el.value = item.data[key];
+                    }
+                }
+            }
+            switchTab(item.type);
+            updatePreview();
+        }
+    }
+
+    function clearHistory() {
+        if(confirm("แน่ใจนะว่าจะล้างประวัติทั้งหมด? มันกู้คืนไม่ได้นะมึง!")) {
+            localStorage.removeItem('archHistory');
+            loadHistory();
+        }
+    }
+
+    // Start Init
+    initSettings();
+    updatePreview();
+</script>
+
+</body>
+</html>
