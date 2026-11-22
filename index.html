@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ArchDoc - Minimalist Document Generator</title>
-    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&family=Sarabun:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&family=Sarabun:wght@300;400;500;600&display=swap" rel="stylesheet" crossorigin="anonymous">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.13/html-to-image.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/jspdf.umd.min.js"></script>
     <style>
         :root {
             --black: #111;
@@ -70,8 +71,8 @@
             flex-direction: column;
         }
 
-        .exporting { gap: 0 !important; }
-        .exporting .pdf-sheet { box-shadow: none !important; margin-bottom: 0 !important; }
+        .pdf-export { position: fixed; top: 0; left: -10000px; }
+        .pdf-export .pdf-sheet { box-shadow: none; }
 
         .q-section, .items-table tr, .signatures { page-break-inside: avoid; }
         
@@ -97,7 +98,7 @@
         .meta-table td:first-child { font-weight: 600; text-align: right; font-family: var(--font-head); white-space: nowrap; }
         
         .address-box { font-size: 12px; line-height: 1.6; margin-bottom: 20px; display: flex; justify-content: space-between; flex-shrink: 0; }
-        .address-col { width: 48%; }
+        .address-col { width: 48%; overflow-wrap: anywhere; }
         .address-title { font-family: var(--font-head); font-weight: 600; border-bottom: 1px solid var(--gray-border); margin-bottom: 5px; padding-bottom: 3px; }
 
         .items-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
@@ -176,7 +177,7 @@
             <div class="checkbox-group"><input type="checkbox" id="b-wht" checked onchange="updatePreview()"><label for="b-wht">หักภาษี ณ ที่จ่าย 3%</label></div>
             <div class="form-group" style="margin-top:15px;"><label>อัปโหลดลายเซ็นผู้วางบิล</label><input type="file" id="b-sig-upload" accept="image/*" onchange="uploadSignature(this, 'b-sig')"></div>
             
-            <button class="btn" onclick="exportPDF('billing')">ดาวน์โหลด PDF (ใบวางบิล)</button>
+            <button class="btn" onclick="exportPDF('billing', this)">ดาวน์โหลด PDF (ใบวางบิล)</button>
             <hr style="margin:20px 0; border:0; border-top:1px dashed var(--gray-border);">
             <div class="form-group"><label>หลักฐานการโอนเงิน (เพื่อออกใบเสร็จ)</label><input type="file" id="slip-upload" accept="image/*"></div>
             <button class="btn btn-outline" onclick="confirmPayment()">ยืนยันการชำระเงิน -> ออกใบเสร็จ</button>
@@ -195,7 +196,7 @@
             <p style="font-size: 12px; color: var(--gray-text); margin-bottom: 15px;">*ข้อมูลดึงมาจากหน้าใบวางบิล</p>
             <div class="form-group"><label>วันที่รับเงิน</label><input type="date" id="r-date" oninput="updatePreview()"></div>
             <div class="form-group"><label>อัปโหลดลายเซ็นผู้รับเงิน</label><input type="file" id="r-sig-upload" accept="image/*" onchange="uploadSignature(this, 'r-sig')"></div>
-            <button class="btn" onclick="exportPDF('receipt')">ดาวน์โหลด PDF (ใบเสร็จรับเงิน)</button>
+            <button class="btn" onclick="exportPDF('receipt', this)">ดาวน์โหลด PDF (ใบเสร็จรับเงิน)</button>
         </div>
 
         <!-- ใบเสนอราคา ฟอร์ม -->
@@ -251,7 +252,7 @@
 
             <div class="form-group"><label>อัปโหลดลายเซ็นผู้เสนอราคา</label><input type="file" id="q-sig-upload" accept="image/*" onchange="uploadSignature(this, 'q-sig')"></div>
             
-            <button class="btn" onclick="exportPDF('quotation')">ดาวน์โหลด PDF (ใบเสนอราคา)</button>
+            <button class="btn" onclick="exportPDF('quotation', this)">ดาวน์โหลด PDF (ใบเสนอราคา)</button>
 
             <hr style="margin:30px 0; border:0; border-top:2px solid var(--black);">
             
@@ -963,32 +964,63 @@
         updatePreview();
     }
 
-    function exportPDF(docType) {
-        let element = document.getElementById('page-' + docType);
-        
-        element.classList.add('exporting'); 
-        
-        let pname = (docType === 'quotation') ? document.getElementById('q-proj-name').value : document.getElementById('b-proj-name').value;
-        pname = pname || 'Project';
-        let docNameTH = docType === 'billing' ? 'ใบวางบิล' : (docType === 'receipt' ? 'ใบเสร็จ' : 'ใบเสนอราคา');
-        let filename = `${ymdStr}_${docNameTH}_${pname}.pdf`;
+    async function exportPDF(docType, button) {
+        const source = document.getElementById('page-' + docType);
+        const project = document.getElementById(docType === 'quotation' ? 'q-proj-name' : 'b-proj-name').value || 'Project';
+        const names = { billing: 'ใบวางบิล', receipt: 'ใบเสร็จ', quotation: 'ใบเสนอราคา' };
+        const filename = `${ymdStr}_${names[docType]}_${project}.pdf`;
 
-        let opt = {
-            margin:       0,
-            filename:     filename,
-            image:        { type: 'jpeg', quality: 0.98 },
-            html2canvas:  { scale: 2, useCORS: true },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak:    { mode: ['css', 'legacy'] }
-        };
+        const exportArea = document.createElement('div');
+        exportArea.className = 'pdf-export';
+        exportArea.setAttribute('aria-hidden', 'true');
 
-        html2pdf().set(opt).from(element).save().then(() => {
-            element.classList.remove('exporting');
+        const sheets = Array.from(source.children, sheet => sheet.cloneNode(true));
+        for (const sheet of sheets) {
+            // Set the language on the captured element so Thai line breaking also
+            // applies inside the SVG used to render the PDF image.
+            sheet.lang = document.documentElement.lang;
+            sheet.removeAttribute('id');
+            sheet.querySelectorAll('[id]').forEach(element => element.removeAttribute('id'));
+            exportArea.appendChild(sheet);
+        }
+
+        button.disabled = true;
+        document.body.appendChild(exportArea);
+        try {
+            await document.fonts.ready;
+            await Promise.all(Array.from(exportArea.querySelectorAll('img'), img => img.decode().catch(() => {})));
+            const fontEmbedCSS = await htmlToImage.getFontEmbedCSS(sheets[0], { preferredFontFormat: 'woff2' });
+            const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+            const pageWidth = pdf.internal.pageSize.getWidth();
+            const pageHeight = pdf.internal.pageSize.getHeight();
+
+            // Each .pdf-sheet maps to one PDF page, with no pixel-based page cuts.
+            for (const [index, sheet] of sheets.entries()) {
+                const bounds = sheet.getBoundingClientRect();
+                const canvas = await htmlToImage.toCanvas(sheet, {
+                    width: Math.ceil(Math.max(bounds.width, sheet.scrollWidth)),
+                    height: Math.ceil(Math.max(bounds.height, sheet.scrollHeight)),
+                    pixelRatio: 2,
+                    backgroundColor: '#fff',
+                    fontEmbedCSS,
+                    filter: node => !(node instanceof HTMLImageElement) || node.naturalWidth > 0
+                });
+                const scale = Math.min(pageWidth / canvas.width, pageHeight / canvas.height);
+                const width = canvas.width * scale;
+                const height = canvas.height * scale;
+                if (index > 0) pdf.addPage();
+                pdf.addImage(canvas.toDataURL('image/jpeg', 0.98), 'JPEG', (pageWidth - width) / 2, 0, width, height);
+            }
+
+            await pdf.save(filename, { returnPromise: true });
             saveToHistory(docType);
-        }).catch(err => {
-            element.classList.remove('exporting');
+        } catch (err) {
             console.error(err);
-        });
+            alert('สร้าง PDF ไม่สำเร็จ กรุณาลองดาวน์โหลดอีกครั้ง');
+        } finally {
+            exportArea.remove();
+            button.disabled = false;
+        }
     }
 
     function saveToHistory(docType) {
