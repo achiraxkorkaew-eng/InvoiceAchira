@@ -114,6 +114,8 @@
         .thai-baht-text { font-size: 12px; font-weight: 600; margin-top: 10px; text-align: right; flex-shrink: 0; }
 
         .payment-info { width: 100%; font-size: 12px; padding: 15px; background: var(--gray-light); border: 1px solid var(--gray-border); border-radius: 2px; line-height: 1.5; margin-top: 30px; margin-bottom: 40px; display: flex; align-items: center; gap: 15px; flex-shrink: 0; }
+        .payment-info > div { flex: 1; min-width: 0; }
+        .account-number { display: inline-block; white-space: nowrap; }
         .bank-logo { width: 50px; height: 50px; object-fit: contain; border-radius: 4px; }
 
         .signatures { display: flex; justify-content: space-between; margin-top: auto; font-size: 12px; text-align: center; padding-top: 20px; }
@@ -308,7 +310,7 @@
                 <div class="thai-baht-text" id="pv-b-text">(ศูนย์บาทถ้วน)</div>
                 <div class="payment-info">
                     <img src="bank.png" class="bank-logo" alt="Bangkok Bank" onerror="this.style.display='none'">
-                    <div><strong style="font-family:var(--font-head); font-size:14px;">ข้อมูลการชำระเงิน (Bank Transfer)</strong><br>ธนาคาร: <strong id="pv-b-pvd-bank">-</strong> &nbsp;|&nbsp; ชื่อบัญชี: <strong id="pv-b-pvd-bankacc">-</strong> &nbsp;|&nbsp; เลขบัญชี: <strong id="pv-b-pvd-bankno">-</strong><br><span style="color:#888; font-size:11px;">*กรุณาแนบหลักฐานการโอนเงินเมื่อทำการชำระเรียบร้อยแล้ว</span></div>
+                    <div><strong style="font-family:var(--font-head); font-size:14px;">ข้อมูลการชำระเงิน (Bank Transfer)</strong><br>ธนาคาร: <strong id="pv-b-pvd-bank">-</strong> &nbsp;|&nbsp; ชื่อบัญชี: <strong id="pv-b-pvd-bankacc">-</strong> &nbsp;|&nbsp; <span class="account-number">เลขบัญชี: <strong id="pv-b-pvd-bankno">-</strong></span><br><span style="color:#888; font-size:11px;">*กรุณาแนบหลักฐานการโอนเงินเมื่อทำการชำระเรียบร้อยแล้ว</span></div>
                 </div>
                 <div class="signatures">
                     <div class="sig-box"><div class="sig-line"></div>ผู้รับวางบิล / ลูกค้า<br>วันที่ _______/_______/_______</div>
