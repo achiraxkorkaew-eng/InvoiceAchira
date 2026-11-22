@@ -7,7 +7,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&family=Sarabun:wght@300;400;500;600&display=swap" rel="stylesheet" crossorigin="anonymous">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.13/html-to-image.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/4.2.1/jspdf.umd.min.js"></script>
-    <style>
+    <style id="archdoc-styles">
         :root {
             --black: #111;
             --white: #fff;
@@ -72,7 +72,6 @@
         }
 
         .pdf-export { position: fixed; top: 0; left: -10000px; }
-        .pdf-export .pdf-sheet { box-shadow: none; }
 
         .q-section, .items-table tr, .signatures { page-break-inside: avoid; }
         
@@ -964,6 +963,65 @@
         updatePreview();
     }
 
+    async function renderPDFSheet(sheet, pageStyles) {
+        const bounds = sheet.getBoundingClientRect();
+        const width = Math.ceil(Math.max(bounds.width, sheet.scrollWidth));
+        const height = Math.ceil(Math.max(bounds.height, sheet.scrollHeight));
+
+        const svgNamespace = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(svgNamespace, 'svg');
+        const foreignObject = document.createElementNS(svgNamespace, 'foreignObject');
+        svg.setAttribute('width', width);
+        svg.setAttribute('height', height);
+        foreignObject.setAttribute('width', '100%');
+        foreignObject.setAttribute('height', '100%');
+        svg.appendChild(foreignObject);
+
+        const wrapper = document.createElement('div');
+        wrapper.style.fontFamily = 'var(--font-body)';
+        wrapper.style.color = 'var(--black)';
+        const style = document.createElement('style');
+        style.textContent = pageStyles;
+        const copy = sheet.cloneNode(true);
+        copy.style.boxShadow = 'none';
+        wrapper.append(style, copy);
+        foreignObject.appendChild(wrapper);
+
+        // SVG images need their resources embedded to be drawn on a canvas.
+        const originals = sheet.querySelectorAll('img');
+        await Promise.all(Array.from(copy.querySelectorAll('img'), async (img, index) => {
+            const original = originals[index];
+            try {
+                await original.decode();
+            } catch {
+                img.remove();
+                return;
+            }
+            if (original.src.startsWith('data:')) return;
+
+            const asset = document.createElement('canvas');
+            asset.width = original.naturalWidth;
+            asset.height = original.naturalHeight;
+            asset.getContext('2d').drawImage(original, 0, 0);
+            img.src = asset.toDataURL();
+        }));
+
+        const svgImage = new Image();
+        const markup = new XMLSerializer().serializeToString(svg);
+        svgImage.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(markup);
+        await svgImage.decode();
+
+        const canvas = document.createElement('canvas');
+        const pixelRatio = Math.min(2, 16384 / Math.max(width, height));
+        canvas.width = Math.ceil(width * pixelRatio);
+        canvas.height = Math.ceil(height * pixelRatio);
+        const context = canvas.getContext('2d');
+        context.fillStyle = '#fff';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(svgImage, 0, 0, canvas.width, canvas.height);
+        return canvas;
+    }
+
     async function exportPDF(docType, button) {
         const source = document.getElementById('page-' + docType);
         const project = document.getElementById(docType === 'quotation' ? 'q-proj-name' : 'b-proj-name').value || 'Project';
@@ -988,23 +1046,15 @@
         document.body.appendChild(exportArea);
         try {
             await document.fonts.ready;
-            await Promise.all(Array.from(exportArea.querySelectorAll('img'), img => img.decode().catch(() => {})));
             const fontEmbedCSS = await htmlToImage.getFontEmbedCSS(sheets[0], { preferredFontFormat: 'woff2' });
+            const pageStyles = document.getElementById('archdoc-styles').textContent + '\n' + fontEmbedCSS;
             const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
             const pageWidth = pdf.internal.pageSize.getWidth();
             const pageHeight = pdf.internal.pageSize.getHeight();
 
             // Each .pdf-sheet maps to one PDF page, with no pixel-based page cuts.
             for (const [index, sheet] of sheets.entries()) {
-                const bounds = sheet.getBoundingClientRect();
-                const canvas = await htmlToImage.toCanvas(sheet, {
-                    width: Math.ceil(Math.max(bounds.width, sheet.scrollWidth)),
-                    height: Math.ceil(Math.max(bounds.height, sheet.scrollHeight)),
-                    pixelRatio: 2,
-                    backgroundColor: '#fff',
-                    fontEmbedCSS,
-                    filter: node => !(node instanceof HTMLImageElement) || node.naturalWidth > 0
-                });
+                const canvas = await renderPDFSheet(sheet, pageStyles);
                 const scale = Math.min(pageWidth / canvas.width, pageHeight / canvas.height);
                 const width = canvas.width * scale;
                 const height = canvas.height * scale;
